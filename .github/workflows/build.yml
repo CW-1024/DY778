@@ -1,0 +1,78 @@
+name: Build DY778
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 30
+    env:
+      THEOS_REVISION: 88506b2c22e9e07dd4ed055f23c9e398a117a2c7
+      SDK_REVISION: 0222fd5413cf4b9af096f37b4621afa2688572f7
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          brew install make ldid
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+
+      - name: Prepare Theos and iOS SDK
+        run: |
+          set -euo pipefail
+          export THEOS="$RUNNER_TEMP/dy778-theos"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+          git init "$THEOS"
+          git -C "$THEOS" remote add origin https://github.com/roothide/theos.git
+          git -C "$THEOS" fetch --depth=1 origin "$THEOS_REVISION"
+          git -C "$THEOS" checkout --detach FETCH_HEAD
+          git -C "$THEOS" submodule update --init --recursive --depth=1
+          sdk_dir="$RUNNER_TEMP/dy778-sdks"
+          git clone --filter=blob:none --no-checkout https://github.com/theos/sdks.git "$sdk_dir"
+          git -C "$sdk_dir" sparse-checkout set iPhoneOS16.5.sdk
+          git -C "$sdk_dir" checkout "$SDK_REVISION"
+          mkdir -p "$THEOS/sdks"
+          cp -R "$sdk_dir/iPhoneOS16.5.sdk" "$THEOS/sdks/"
+
+      - name: Build package
+        run: |
+          set -euo pipefail
+          build_time=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M')
+          make package FINALPACKAGE=1 DY778_BUILD_TIME="$build_time" -j"$(sysctl -n hw.ncpu)"
+          shopt -s nullglob
+          deb_files=(packages/*.deb)
+          test "${#deb_files[@]}" -eq 1
+          version=$(awk -F': ' '$1 == "Version" { print $2; exit }' control)
+          test "$version" = "1.0-1"
+          mkdir -p dist
+          cp "${deb_files[0]}" "dist/DY778-${version}-rootless.deb"
+          extract_dir="$RUNNER_TEMP/dy778-package"
+          mkdir -p "$extract_dir"
+          archive=$(ar -t "${deb_files[0]}" | awk '/^data[.]tar/ { print; exit }')
+          test -n "$archive"
+          ar -p "${deb_files[0]}" "$archive" | tar -xf - -C "$extract_dir"
+          dylib="$extract_dir/var/jb/Library/MobileSubstrate/DynamicLibraries/DY778.dylib"
+          test -f "$dylib"
+          test "$(lipo -archs "$dylib")" = "arm64"
+          cp "$dylib" dist/DY778.dylib
+          cd dist
+          shasum -a 256 "DY778-${version}-rootless.deb" DY778.dylib > SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DY778-rootless
+          path: |
+            dist/*.deb
+            dist/DY778.dylib
+            dist/SHA256SUMS
+          if-no-files-found: error

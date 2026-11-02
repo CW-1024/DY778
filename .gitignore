@@ -1,0 +1,15 @@
+.theos/
+.validation/
+*.o
+.DS_Store
+packages/
+dist/
+scripts/
+tests/
+docs/
+BUILD.md
+*.log
+*.deb
+*.dylib
+__pycache__/
+*.pyc
