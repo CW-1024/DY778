@@ -7,6 +7,7 @@
 #import "DY778Playback.h"
 #import "DY778CacheCleaner.h"
 #import "DY778FeedFilter.h"
+#import "DY778LiveLike.h"
 
 static void DY778InstallModules(void) {
     DY778InstallCoreHooks();
@@ -16,6 +17,7 @@ static void DY778InstallModules(void) {
     DY778InstallRecallNotifications();
     DY778InstallMessageUIHooks();
     DY778InstallLuckyBagHooks();
+    DY778InstallLiveLikeHooks();
     DY778InstallPlaybackHooks();
     DY778InstallDefaultPlaybackHooks();
     DY778InstallFeedFilterHooks();

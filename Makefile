@@ -4,7 +4,7 @@ THEOS ?= $(HOME)/theos
 export THEOS_PACKAGE_SCHEME = rootless
 export DEBUG = 0
 FINALPACKAGE = 1
-PACKAGE_VERSION = 1.0-1
+PACKAGE_VERSION = 1.0-2
 INSTALL_TARGET_PROCESSES = Aweme
 export DY778_BUILD_TIME := $(if $(DY778_BUILD_TIME),$(DY778_BUILD_TIME),$(shell TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M'))
 

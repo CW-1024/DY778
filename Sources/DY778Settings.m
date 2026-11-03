@@ -7,6 +7,7 @@
 #import "DY778Help.h"
 #import "DY778RecallNotifications.h"
 #import "DY778CacheCleaner.h"
+#import "DY778LiveLikePolicy.h"
 #import <QuartzCore/QuartzCore.h>
 #import <math.h>
 
@@ -78,6 +79,8 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
 }
 - (void)changed:(UISlider *)slider {
     float value = [self.unit isEqualToString:@"pt"] ? roundf(slider.value) : roundf(slider.value * 100) / 100;
+    if ([self.preferenceKey isEqualToString:@"liveLike.interval"]) value = DY778LiveLikeInterval(slider.value);
+    if ([self.preferenceKey isEqualToString:@"liveLike.pause"]) value = DY778LiveLikePause(slider.value);
     slider.value = value; [self updateValue]; DY778Set(self.preferenceKey, @(value));
 }
 @end
@@ -162,7 +165,7 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
         [key isEqualToString:@"time.color"] || [key isEqualToString:@"recall.bubbleColor"] || [key isEqualToString:@"edit.bubbleColor"]) {
         [UIView performWithoutAnimation:^{ [self updatePreview]; }]; return;
     }
-    if ([key isEqualToString:@"lucky.delay"]) return;
+    if ([key isEqualToString:@"lucky.delay"] || [key isEqualToString:@"liveLike.interval"] || [key isEqualToString:@"liveLike.pause"]) return;
     [self refresh];
     if (preview && !theme) [UIView performWithoutAnimation:^{ [self updatePreview]; }];
 }
@@ -190,10 +193,11 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
                 DY778Row(@"时间标签", @"格式、位置与颜色", @"nav", @"time", @"clock.fill")]),
             DY778Section(@"直播与播放", @"", @[
                 DY778Row(@"福袋助手", @"参与条件、开奖提醒与参与记录", @"nav", @"lucky", @"gift.fill"),
+                DY778Row(@"直播自动点赞", @"双击开始、目标次数与点赞进度", @"nav", @"liveLike", @"hand.thumbsup.fill"),
                 DY778Row(@"视频播放", @"默认倍速、播完暂停与长按倍速", @"nav", @"playback", @"play.rectangle.fill")]),
             DY778Section(@"测试功能", @"仅处理推荐页的视频和图文。综合原生广告标记、软广信息、交易信息与促销文案判断，不因品牌名直接跳过。保护已关注、点赞或收藏的作品；下滑可回看，近期已跳过的作品不会再次跳过。", @[
                 DY778Row(@"跳过疑似广告", @"谨慎识别 · 不确定时保留", @"switch", @"experimental.skipAds", @"line.3.horizontal.decrease.circle")]),
-            DY778Section(@"设置", @"DY778 1.0-1 · 设置即时生效", @[
+            DY778Section(@"设置", @"DY778 1.0-2 · 设置即时生效", @[
                 DY778Row(@"缓存管理", @"查看占用、手动清理与自动整理", @"nav", @"cache", @"internaldrive.fill"),
                 DY778Row(@"外观", @"主题与点缀色", @"nav", @"appearance", @"paintpalette.fill"),
                 DY778Row(@"关于 DY778", @"版本信息、开源项目与频道", @"nav", @"about", @"info.circle")])
@@ -278,6 +282,18 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
                 DY778Row(@"轻触反馈", @"需要处理或参与确认时提供触感", @"switch", @"lucky.haptics", @"hand.tap")]),
             DY778Section(@"离开直播后", @"历史只记录已经发生的操作与结果，退出房间后不会继续执行旧任务。", @[
                 DY778Row(@"最近参与记录", @"查看房间、奖品、时间与参与状态", @"action", @"luckyHistory", @"clock.arrow.circlepath")])
+        ];
+    } else if ([self.page isEqualToString:@"liveLike"]) {
+        self.title = @"直播自动点赞";
+        self.sections = @[
+            DY778Section(@"双击开始本轮", @"开启后，在正在观看的直播画面双击，按设定次数逐次点赞，提交完成后停止。再次双击、离开直播、切到后台或关闭开关会结束本轮，返回后需重新双击。", @[
+                DY778Row(@"启用自动点赞", @"保留原有双击操作，每次手动开始", @"switch", @"liveLike.enabled", @"hand.thumbsup"),
+                DY778Row(@"每轮点赞次数", @"1–9999 次，默认 100 次", @"number", @"liveLike.target", @"number")]),
+            DY778Section(@"点赞节奏", @"点赞间隔支持 0.6–2 秒，默认 1 秒。每完成 20 次自动点赞，将下一次间隔调整为设定的休息时间（1–3 秒，默认 1.5 秒），且不短于点赞间隔；等待提交反馈时可能更久。修改本页设置会结束正在进行的任务。", @[
+                DY778Range(@"点赞间隔", @"liveLike.interval", .6, 2, @"秒"),
+                DY778Range(@"每 20 次休息", @"liveLike.pause", 1, 3, @"秒")]),
+            DY778Section(@"次数与显示", @"顶部仅显示“自动点赞中 已执行次数/目标次数”，不包含触发时的手动双击。达到目标后等待本轮提交结果，确认完成后提示自动收起。直播间总数还包含其他观众的点赞，并受刷新节奏和平台计数规则影响，实际增量以直播间显示为准。网络异常、提交受限或长时间未收到反馈时会停止本轮。\n\n间隔和休息时间越短、连续使用越频繁，越容易触发抖音的频率限制或风控，可能出现延迟、少计或暂停。建议优先使用默认节奏，按需设置次数；如遇异常，可延长间隔或休息时间、稍后再试。次数上限与短暂停顿用于控制连续操作，不代表免受风控。", @[
+                DY778Row(@"单行进度", @"显示本轮已执行次数，提交确认完成后自动收起。", @"info", @"liveLike.progress", @"info.circle")])
         ];
     } else if ([self.page isEqualToString:@"playback"]) {
         self.title = @"视频播放";
@@ -421,7 +437,8 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
         cell.detailTextLabel.text = index != NSNotFound ? row[@"labels"][index] : [NSString stringWithFormat:@"自定义 · %@", value ?: @""];
     } else if ([kind isEqualToString:@"number"]) {
         long long value = (long long)DY778Number(key);
-        NSString *unit = [key hasSuffix:@"MB"] ? @"MB" : ([key hasSuffix:@"retentionDays"] ? @"天" : @"条");
+        NSString *unit = [key isEqualToString:@"liveLike.target"] ? @"次" : ([key hasSuffix:@"MB"] ? @"MB" : ([key hasSuffix:@"retentionDays"] ? @"天" : @"条"));
+        if ([key isEqualToString:@"liveLike.target"]) value = DY778LiveLikeTarget(DY778Number(key));
         cell.detailTextLabel.text = value == 0 ? @"不限制 · 点击自定义" : [NSString stringWithFormat:@"%lld %@ · 点击修改", value, unit];
     } else if ([kind isEqualToString:@"color"]) {
         cell.detailTextLabel.text = [DY778String(key) uppercaseString];
@@ -490,6 +507,14 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
 }
 - (void)numberChanged:(UITextField *)field {
     NSString *text = field.text ?: @"";
+    if ([self.numberKey isEqualToString:@"liveLike.target"]) {
+        NSCharacterSet *invalid = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789"] invertedSet];
+        BOOL valid = text.length > 0 && text.length <= 4 && [text rangeOfCharacterFromSet:invalid].location == NSNotFound &&
+            text.longLongValue >= 1 && text.longLongValue <= DY778LiveLikeMaximumTarget;
+        self.numberAlert.actions.lastObject.enabled = valid;
+        self.numberAlert.message = @"请输入 1–9999 的整数，默认 100。达到本轮目标并完成提交后停止；修改次数会结束正在进行的任务。";
+        return;
+    }
     NSUInteger maximum = [self.numberKey hasSuffix:@"MB"] ? 1048576 : ([self.numberKey isEqualToString:@"cache.maxAgeHours"] ? 876000 : ([self.numberKey hasSuffix:@"retentionDays"] ? 36500 : 10000000));
     NSCharacterSet *invalid = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789"] invertedSet];
     BOOL valid = text.length > 0 && text.length <= 8 && [text rangeOfCharacterFromSet:invalid].location == NSNotFound && text.longLongValue <= (long long)maximum;

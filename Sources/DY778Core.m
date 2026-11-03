@@ -1,9 +1,10 @@
 #import "DY778Core.h"
 #import <QuartzCore/QuartzCore.h>
 #import "DY778ArchiveStorage.h"
+#import "DY778LiveLikePolicy.h"
 #import <math.h>
 
-NSString *const DY778Version = @"1.0-1";
+NSString *const DY778Version = @"1.0-2";
 #ifndef DY778_BUILD_TIME
 #define DY778_BUILD_TIME "未记录"
 #endif
@@ -35,6 +36,8 @@ static NSDictionary *DY778DefaultValues(void) {
         @"lucky.autoPhrase": @NO, @"lucky.autoJoin": @YES, @"lucky.delay": @1.2,
         @"lucky.prompt": @YES, @"lucky.haptics": @NO, @"lucky.showStatus": @YES,
         @"lucky.compact": @YES,
+        @"liveLike.enabled": @NO, @"liveLike.target": @(DY778LiveLikeDefaultTarget), @"liveLike.interval": @1,
+        @"liveLike.pause": @1.5,
         @"playback.stopAtEnd": @NO, @"playback.longPressEnabled": @NO, @"playback.longPressRate": @2,
         @"playback.defaultEnabled": @NO, @"playback.defaultRate": @1.25, @"experimental.skipAds": @NO,
         @"cache.enabled": @NO, @"cache.onLaunch": @NO, @"cache.onReturn": @NO, @"cache.maxMB": @0, @"cache.maxAgeHours": @0,
@@ -72,6 +75,18 @@ NSString *DY778RecallMarkerText(void) { return DY778NormalizeMarker(DY778String(
 NSString *DY778EditMarkerText(void) { return DY778NormalizeMarker(DY778String(@"edit.badgeText"), @"编辑历史"); }
 void DY778Set(NSString *key, id value) {
     if (!key.length) return;
+    if ([key isEqualToString:@"liveLike.target"]) {
+        if (![value respondsToSelector:@selector(doubleValue)]) return;
+        value = @(DY778LiveLikeTarget([value doubleValue]));
+    }
+    if ([key isEqualToString:@"liveLike.interval"]) {
+        if (![value respondsToSelector:@selector(doubleValue)]) return;
+        value = @(DY778LiveLikeInterval([value doubleValue]));
+    }
+    if ([key isEqualToString:@"liveLike.pause"]) {
+        if (![value respondsToSelector:@selector(doubleValue)]) return;
+        value = @(DY778LiveLikePause([value doubleValue]));
+    }
     NSDictionary *ranges = @{@"time.fontSize": @[@9, @17], @"time.opacity": @[@0.35, @1],
         @"lucky.delay": @[@0.5, @5], @"recall.retentionDays": @[@0, @36500],
         @"recall.maxRecords": @[@0, @10000000], @"edit.retentionDays": @[@0, @36500], @"edit.maxRecords": @[@0, @10000000],
