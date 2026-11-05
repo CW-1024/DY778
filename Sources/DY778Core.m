@@ -1,10 +1,14 @@
+#import "DY778Enhancements.h"
 #import "DY778Core.h"
 #import <QuartzCore/QuartzCore.h>
 #import "DY778ArchiveStorage.h"
 #import "DY778LiveLikePolicy.h"
+#import "DY778DisplayStats.h"
+#import "DY778Spark.h"
+#import "DY778ListClear.h"
 #import <math.h>
 
-NSString *const DY778Version = @"1.0-2";
+NSString *const DY778Version = @"1.0-3";
 #ifndef DY778_BUILD_TIME
 #define DY778_BUILD_TIME "未记录"
 #endif
@@ -16,7 +20,7 @@ NSNotificationName const DY778RecallDetectedNotification = @"DY778RecallDetected
 NSUserDefaults *DY778Preferences(void) {
     static NSUserDefaults *preferences;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ preferences = DY778MigratedPreferences(); });
+    dispatch_once(&once, ^{ preferences = DY778CreatePreferences(); });
     return preferences;
 }
 static NSDictionary *DY778DefaultValues(void) {
@@ -41,6 +45,13 @@ static NSDictionary *DY778DefaultValues(void) {
         @"playback.stopAtEnd": @NO, @"playback.longPressEnabled": @NO, @"playback.longPressRate": @2,
         @"playback.defaultEnabled": @NO, @"playback.defaultRate": @1.25, @"experimental.skipAds": @NO,
         @"cache.enabled": @NO, @"cache.onLaunch": @NO, @"cache.onReturn": @NO, @"cache.maxMB": @0, @"cache.maxAgeHours": @0,
+        @"liveInfo.viewers": @NO, @"liveInfo.countFormat": @"compact", @"liveInfo.refresh": @3,
+        @"liveInfo.duration": @NO, @"liveInfo.cardDuration": @NO, @"liveInfo.textColor": @"#FFFFFF",
+        @"liveInfo.backgroundColor": @"#000000", @"liveInfo.opacity": @0.64, @"liveInfo.fontSize": @13,
+        @"fans.enabled": @NO,
+        @"displayStats.enabled": @NO, @"spark.enabled": @NO, @"listClear.enabled": @NO,
+        @"confirm.like": @NO, @"confirm.favorite": @NO, @"confirm.follow": @NO,
+        @"confirm.commentLike": @NO, @"confirm.commentDislike": @NO,
         @"appearance": @"system", @"accent": @"#55CDB9"
     };
 }
@@ -50,6 +61,10 @@ void DY778ResetSettings(void) {
     for (NSString *key in @[@"edit.disabledConversations", @"recall.disabledConversations", @"recall.enableNoticeShown", @"lucky.cardX", @"lucky.cardY"])
         [DY778Preferences() removeObjectForKey:key];
     DY778RegisterDefaults();
+    DY778ResetEnhancementSettings();
+    DY778ResetDisplayStats();
+    DY778ResetSpark();
+    DY778ResetListClear();
     dispatch_async(dispatch_get_main_queue(), ^{
         [NSNotificationCenter.defaultCenter postNotificationName:DY778PreferencesChangedNotification object:nil];
     });
@@ -87,7 +102,7 @@ void DY778Set(NSString *key, id value) {
         if (![value respondsToSelector:@selector(doubleValue)]) return;
         value = @(DY778LiveLikePause([value doubleValue]));
     }
-    NSDictionary *ranges = @{@"time.fontSize": @[@9, @17], @"time.opacity": @[@0.35, @1],
+    NSDictionary *ranges = @{@"liveInfo.refresh": @[@2, @10], @"liveInfo.fontSize": @[@11,@19], @"liveInfo.opacity": @[@0.15,@1], @"time.fontSize": @[@9, @17], @"time.opacity": @[@0.35, @1],
         @"lucky.delay": @[@0.5, @5], @"recall.retentionDays": @[@0, @36500],
         @"recall.maxRecords": @[@0, @10000000], @"edit.retentionDays": @[@0, @36500], @"edit.maxRecords": @[@0, @10000000],
         @"playback.longPressRate": @[@1, @3], @"playback.defaultRate": @[@1, @3], @"cache.maxMB": @[@0, @1048576], @"cache.maxAgeHours": @[@0, @876000]};
@@ -110,7 +125,7 @@ void DY778Set(NSString *key, id value) {
 id DY778Read(id object, NSString *key) {
     if (!object || object == NSNull.null || !key.length) return nil;
     if ([object isKindOfClass:NSDictionary.class]) return object[key] == NSNull.null ? nil : object[key];
-    // KVC boxes scalar accessors correctly. Do not dereference arbitrary object ivars.
+    // KVC 会正确装箱标量访问器；不要解引用任意对象 ivar。
     SEL selector = NSSelectorFromString(key);
     NSString *getter = [@"is" stringByAppendingString:[key stringByReplacingCharactersInRange:NSMakeRange(0, 1)
                                                                                    withString:[[key substringToIndex:1] uppercaseString]]];
@@ -148,7 +163,7 @@ BOOL DY778Hook(Class cls, SEL selector, IMP replacement, IMP *original) {
     IMP previous = method_getImplementation(method);
     if (previous == replacement) return YES;
     *original = previous;
-    // Add on the subclass first: replacing an inherited Method would mutate its superclass.
+    // 先在子类上添加方法：直接替换继承来的 Method 会改到父类。
     if (!class_addMethod(cls, selector, replacement, method_getTypeEncoding(method)))
         method_setImplementation(class_getInstanceMethod(cls, selector), replacement);
     return YES;
@@ -231,6 +246,15 @@ UIColor *DY778Background(void) {
             [UIColor colorWithRed:.951 green:.965 blue:.966 alpha:1];
     }];
 }
+UIColor *DY778AccentForeground(void) {
+    UIColor *accent = DY778Accent();
+    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *trait) {
+        CGFloat r=0, g=0, b=0, a=1; [[accent resolvedColorWithTraitCollection:trait] getRed:&r green:&g blue:&b alpha:&a];
+        double (^linear)(double) = ^double(double value) { return value<=.04045 ? value/12.92 : pow((value+.055)/1.055,2.4); };
+        double luminance=.2126*linear(r)+.7152*linear(g)+.0722*linear(b);
+        return luminance>.179 ? UIColor.blackColor : UIColor.whiteColor;
+    }];
+}
 UIColor *DY778CardBackground(void) {
     return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *trait) {
         return trait.userInterfaceStyle == UIUserInterfaceStyleDark ?
@@ -297,8 +321,8 @@ void DY778StyleController(UIViewController *controller) {
 @property(nonatomic) BOOL changingPage;
 @property(nonatomic, strong) UIPanGestureRecognizer *rootBackGesture;
 @property(nonatomic, strong) UIPercentDrivenInteractiveTransition *returnInteraction;
-- (void)cgn_prepareController:(UIViewController *)controller;
-- (void)cgn_back;
+- (void)dy778_prepareController:(UIViewController *)controller;
+- (void)dy778_back;
 @end
 @implementation DY778NavigationController
 - (void)viewDidLoad {
@@ -308,12 +332,12 @@ void DY778StyleController(UIViewController *controller) {
     self.navigationBar.backgroundColor = DY778Background(); self.navigationBar.prefersLargeTitles = NO;
     self.interactivePopGestureRecognizer.enabled = NO;
     self.transitioningDelegate = self;
-    self.rootBackGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(cgn_rootBack:)];
+    self.rootBackGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(dy778_rootBack:)];
     self.rootBackGesture.maximumNumberOfTouches = 1; self.rootBackGesture.delegate = self;
     [self.view addGestureRecognizer:self.rootBackGesture];
 }
 - (UIViewController *)childViewControllerForStatusBarStyle { return self.topViewController; }
-- (void)cgn_prepareController:(UIViewController *)controller {
+- (void)dy778_prepareController:(UIViewController *)controller {
     controller.overrideUserInterfaceStyle = DY778InterfaceStyle();
     [controller loadViewIfNeeded]; DY778StyleController(controller);
     UIButton *back = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -324,13 +348,13 @@ void DY778StyleController(UIViewController *controller) {
     back.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
     back.contentEdgeInsets = UIEdgeInsetsMake(0, 0, 0, 12); back.titleEdgeInsets = UIEdgeInsetsMake(0, 6, 0, -6);
     back.accessibilityLabel = @"返回上一层";
-    [back addTarget:self action:@selector(cgn_back) forControlEvents:UIControlEventTouchUpInside];
+    [back addTarget:self action:@selector(dy778_back) forControlEvents:UIControlEventTouchUpInside];
     CGFloat width = MAX(74, ceil([@"返回" sizeWithAttributes:@{NSFontAttributeName:back.titleLabel.font}].width) + 36);
     back.frame = CGRectMake(0, 0, width, 44);
     controller.navigationItem.hidesBackButton = YES;
     controller.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:back];
 }
-- (void)cgn_back {
+- (void)dy778_back {
     if (self.changingPage || self.transitionCoordinator) return;
     [self.view endEditing:YES];
     if (self.viewControllers.count > 1) [self popViewControllerAnimated:YES];
@@ -361,7 +385,7 @@ void DY778StyleController(UIViewController *controller) {
     return other == scroll.panGestureRecognizer && [scroll isDescendantOfView:self.view] &&
         scroll.contentSize.width <= scroll.bounds.size.width - scroll.adjustedContentInset.left - scroll.adjustedContentInset.right + 1;
 }
-- (void)cgn_rootBack:(UIPanGestureRecognizer *)gesture {
+- (void)dy778_rootBack:(UIPanGestureRecognizer *)gesture {
     CGFloat width = MAX(1, CGRectGetWidth(self.view.bounds));
     CGFloat progress = MIN(1, MAX(0, [gesture translationInView:self.view].x / width));
     if (gesture.state == UIGestureRecognizerStateBegan) {
@@ -396,7 +420,7 @@ void DY778StyleController(UIViewController *controller) {
 }
 - (void)navigationController:(UINavigationController *)navigationController willShowViewController:(UIViewController *)controller animated:(BOOL)animated {
     self.changingPage = YES;
-    [self setNavigationBarHidden:NO animated:NO]; [self cgn_prepareController:controller];
+    [self setNavigationBarHidden:NO animated:NO]; [self dy778_prepareController:controller];
 }
 - (void)navigationController:(UINavigationController *)navigationController didShowViewController:(UIViewController *)controller animated:(BOOL)animated {
     self.changingPage = NO;
@@ -413,20 +437,40 @@ void DY778PresentController(UIViewController *source, UIViewController *controll
         DY778NavigationController *navigation = (DY778NavigationController *)top.navigationController;
         if (navigation.changingPage || navigation.transitionCoordinator || navigation.topViewController != top) return;
         [top.view endEditing:YES];
-        [navigation cgn_prepareController:controller];
+        [navigation dy778_prepareController:controller];
         [navigation pushViewController:controller animated:!UIAccessibilityIsReduceMotionEnabled()];
     } else {
         DY778NavigationController *navigation = [[DY778NavigationController alloc] initWithRootViewController:controller];
         navigation.overrideUserInterfaceStyle = DY778InterfaceStyle();
         navigation.modalPresentationStyle = UIModalPresentationFullScreen;
-        [navigation loadViewIfNeeded]; [navigation cgn_prepareController:controller];
+        [navigation loadViewIfNeeded]; [navigation dy778_prepareController:controller];
         [top presentViewController:navigation animated:NO completion:nil];
     }
+}
+
+NSAttributedString *DY778WarningText(NSString *text, UIFont *font, UIColor *color, NSArray<NSString *> *warnings) {
+    NSString *message = text ?: @"";
+    NSMutableAttributedString *result = [[NSMutableAttributedString alloc] initWithString:message attributes:@{
+        NSFontAttributeName: font ?: [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote],
+        NSForegroundColorAttributeName: color ?: UIColor.secondaryLabelColor
+    }];
+    for (NSString *warning in warnings) {
+        if (!warning.length) continue;
+        NSRange remaining = NSMakeRange(0, message.length);
+        while (remaining.length) {
+            NSRange range = [message rangeOfString:warning options:0 range:remaining];
+            if (range.location == NSNotFound) break;
+            [result addAttribute:NSForegroundColorAttributeName value:UIColor.systemRedColor range:range];
+            remaining = NSMakeRange(NSMaxRange(range), message.length - NSMaxRange(range));
+        }
+    }
+    return result;
 }
 
 @interface DY778NoticeController : UIViewController
 @property(nonatomic, copy) NSString *noticeTitle;
 @property(nonatomic, copy) NSString *noticeMessage;
+@property(nonatomic, copy) NSArray<NSString *> *warningPhrases;
 @property(nonatomic, copy) NSString *confirmTitle;
 @property(nonatomic, copy) dispatch_block_t confirmAction;
 @property(nonatomic) BOOL destructive;
@@ -492,6 +536,8 @@ void DY778PresentController(UIViewController *source, UIViewController *controll
         body.font = [[UIFontMetrics metricsForTextStyle:UIFontTextStyleSubheadline] scaledFontForFont:[UIFont systemFontOfSize:14] maximumPointSize:20];
         [card.centerYAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.centerYAnchor].active = YES;
     }
+    if (self.warningPhrases.count)
+        body.attributedText = DY778WarningText(self.noticeMessage, body.font, body.textColor, self.warningPhrases);
     [NSLayoutConstraint activateConstraints:@[
         [card.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor], cardWidth,
         [card.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:18],
@@ -549,11 +595,16 @@ void DY778PresentController(UIViewController *source, UIViewController *controll
 }
 @end
 void DY778ConfirmDelayed(UIViewController *source, NSString *title, NSString *message, NSTimeInterval delay, dispatch_block_t action) {
+    DY778ConfirmDelayedEmphasized(source, title, message, nil, delay, action);
+}
+void DY778ConfirmDelayedEmphasized(UIViewController *source, NSString *title, NSString *message,
+                                 NSArray<NSString *> *warnings, NSTimeInterval delay, dispatch_block_t action) {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIViewController *top = DY778FrontController(source ?: DY778TopController());
         if (!top || [top isKindOfClass:DY778NoticeController.class]) return;
         DY778NoticeController *notice = [DY778NoticeController new];
         notice.noticeTitle = title; notice.noticeMessage = message; notice.confirmTitle = @"确定";
+        notice.warningPhrases = warnings;
         notice.confirmAction = action; notice.confirmDelay = MAX(0, delay); notice.compact = YES;
         notice.modalPresentationStyle = UIModalPresentationOverFullScreen;
         notice.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;

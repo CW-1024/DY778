@@ -21,8 +21,6 @@ static inline double DY778LiveLikePause(double value) {
     return round(fmin(3.0, fmax(1.0, value)) * 10.0) / 10.0;
 }
 
-// Let the native single-action state reset before the next scheduled action.
-// This is a local timer gap, not a server-side frequency allowance.
 static inline double DY778LiveLikeNativeGap(double interval) {
     return fmin(.7, DY778LiveLikeInterval(interval) - .15);
 }
@@ -41,7 +39,6 @@ static inline const char *DY778LiveLikeResolveRoom(const char *const *rooms, siz
     return room;
 }
 static inline bool DY778LiveLikeSameAccount(const char *initial, const char *current) {
-    // An unavailable identifier is not evidence that the native login failed.
     return !strcmp(initial ? initial : "", current ? current : "");
 }
 

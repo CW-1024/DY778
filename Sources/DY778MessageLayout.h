@@ -34,7 +34,7 @@ static inline int DY778LayoutRightColumn(DY778LayoutRect bounds, DY778LayoutRect
     candidate.y = DY778LayoutMax(minY, DY778LayoutMin(maxY, candidate.y));
     if (DY778LayoutFits(candidate, bounds, obstacles, count)) { *result = candidate; return 1; }
     double nearest = INFINITY;
-    // Move the entire column around existing labels; its x never crosses the bubble.
+    // 整列绕开已有 label 移动；其 x 永不越过气泡。
     for (size_t i = 0; i < count; i++) {
         if (candidate.x >= obstacles[i].x + obstacles[i].width || candidate.x + candidate.width <= obstacles[i].x) continue;
         double edges[2] = {obstacles[i].y - candidate.height - 2, obstacles[i].y + obstacles[i].height + 2};
@@ -49,8 +49,8 @@ static inline int DY778LayoutRightColumn(DY778LayoutRect bounds, DY778LayoutRect
 static inline int DY778LayoutRightPlace(DY778LayoutRect bounds, DY778LayoutRect candidate,
     const DY778LayoutRect *obstacles, size_t count, DY778LayoutRect *result) {
     if (DY778LayoutRightColumn(bounds, candidate, obstacles, count, result)) return 1;
-    // A second plugin may already own the nearest column. Keep both of our labels
-    // together and try a small, bounded set of columns to its right.
+    // 最近的一列可能已被另一插件占用。让我们的两个 label 保持
+    // 在一起，并在其右侧尝试一小组有限的列。
     double columns[8]; size_t columnsCount = 0;
     for (size_t i = 0; i < count; i++) {
         double x = obstacles[i].x + obstacles[i].width + 3;
@@ -104,7 +104,7 @@ static inline DY778MessageLayoutResult DY778ComputeMessageLayout(DY778LayoutRect
             result.timeVisible = result.recallVisible = 1;
             result.timePosition = result.recallPosition = position;
         }
-        // Never split a shared column into unrelated single labels.
+        // 绝不把共享列拆成互不相关的单个 label。
         return result;
     }
     if (time.visible) {
@@ -114,7 +114,7 @@ static inline DY778MessageLayoutResult DY778ComputeMessageLayout(DY778LayoutRect
     if (recall.visible) result.recallVisible = DY778LayoutPlace(bounds, bubble, recall, outgoing, occupied, used, &result.recall, &result.recallPosition);
     return result;
 }
-// Last resort: place the status within the message's painted area, never outside the row.
+// 兜底：把状态放进消息的绘制区域内，绝不放到行外。
 static inline DY778LayoutRect DY778StatusFallbackRect(DY778LayoutRect bounds, DY778LayoutRect bubble, double width, double height) {
     DY778LayoutRect empty = {0};
     if (!isfinite(bounds.x + bounds.y + bounds.width + bounds.height + bubble.x + bubble.y + bubble.width + width + height) || bounds.width < 24 || bounds.height < 16 || width <= 0 || height <= 0) return empty;
@@ -122,7 +122,7 @@ static inline DY778LayoutRect DY778StatusFallbackRect(DY778LayoutRect bounds, DY
     return (DY778LayoutRect){DY778LayoutMax(bounds.x + 4, DY778LayoutMin(bubble.x + bubble.width - width, bounds.x + bounds.width - width - 4)),
         DY778LayoutMax(bounds.y + 2, DY778LayoutMin(bubble.y + 2, bounds.y + bounds.height - height - 2)), width, height};
 }
-// Three independently configured decorations; statuses take priority over a time label.
+// 三个各自配置的装饰项；状态标记优先于时间标签。
 typedef struct { DY778LayoutRect frames[3]; int visible[3]; DY778LayoutPosition positions[3]; int statusFallback; } DY778DecorationLayoutResult;
 static inline DY778DecorationLayoutResult DY778PlaceDecorations(DY778LayoutRect bounds, DY778LayoutRect bubble,
     const DY778LayoutItem items[3], int outgoing, const DY778LayoutRect *obstacles, size_t count) {
@@ -161,7 +161,7 @@ static inline DY778DecorationLayoutResult DY778ComputeDecorationLayout(DY778Layo
         result = DY778PlaceDecorations(bounds, bubble, items, outgoing, obstacles, count);
     }
     if ((recall.visible && !result.visible[1]) || (edit.visible && !result.visible[2])) {
-        // Keep both safety markers readable inside a short row if free space is exhausted.
+        // 空间耗尽时，仍让两个安全标记在短行内可读。
         int both = recall.visible && edit.visible;
         int horizontal = both && recall.height + edit.height + 2 > bounds.height - 4;
         double width = both ? (horizontal ? recall.width + edit.width + 4 : DY778LayoutMax(recall.width, edit.width)) : (recall.visible ? recall.width : edit.width);

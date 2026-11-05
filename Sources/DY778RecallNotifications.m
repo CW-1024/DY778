@@ -1,6 +1,5 @@
 #import "DY778RecallNotifications.h"
 #import "DY778Recall.h"
-#import "DY778ArchiveStorage.h"
 #import "DY778EditHistory.h"
 #import <UserNotifications/UserNotifications.h>
 #import <CommonCrypto/CommonDigest.h>
@@ -176,14 +175,13 @@ static void DY778ShowMessageBanner(NSDictionary *record) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (UIAccessibilityIsVoiceOverRunning() ? 10 : 6) * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [banner close]; });
 }
 static BOOL DY778IsMessageRequest(UNNotificationRequest *request) {
-    return [request.identifier hasPrefix:DY778RecallRequestPrefix] || [request.identifier hasPrefix:DY778EditRequestPrefix] || DY778IsLegacyRecallNotification(request.identifier);
+    return [request.identifier hasPrefix:DY778RecallRequestPrefix] || [request.identifier hasPrefix:DY778EditRequestPrefix];
 }
 static BOOL DY778IsMessageNotification(UNNotification *notification) { return DY778IsMessageRequest(notification.request); }
 static NSDictionary *DY778RecordFromRequest(UNNotificationRequest *request) {
     NSDictionary *info = request.content.userInfo;
-    BOOL legacy = !DY778NoticeString(info, @"DY778Account").length;
-    return @{@"account": DY778NoticeString(info, legacy ? @"CGNAccount" : @"DY778Account"), @"conversation": DY778NoticeString(info, legacy ? @"CGNConversation" : @"DY778Conversation"),
-        @"key": DY778NoticeString(info, legacy ? @"CGNKey" : @"DY778Key"), @"noticeKind": [request.identifier hasPrefix:DY778EditRequestPrefix] ? @"edit" : @"recall"};
+    return @{@"account": DY778NoticeString(info, @"DY778Account"), @"conversation": DY778NoticeString(info, @"DY778Conversation"),
+        @"key": DY778NoticeString(info, @"DY778Key"), @"noticeKind": [request.identifier hasPrefix:DY778EditRequestPrefix] ? @"edit" : @"recall"};
 }
 static NSDictionary *DY778RecordFromNotification(UNNotification *notification) { return DY778RecordFromRequest(notification.request); }
 static void DY778InstallNotificationDelegateHooks(id delegate) {

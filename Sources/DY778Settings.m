@@ -1,3 +1,5 @@
+#import "DY778Enhancements.h"
+#import "DY778RadarUI.h"
 #import "DY778Core.h"
 #import "DY778Recall.h"
 #import "DY778EditHistory.h"
@@ -8,6 +10,10 @@
 #import "DY778RecallNotifications.h"
 #import "DY778CacheCleaner.h"
 #import "DY778LiveLikePolicy.h"
+#import "DY778SettingsPolicy.h"
+#import "DY778DisplayStats.h"
+#import "DY778Spark.h"
+#import "DY778ListClear.h"
 #import <QuartzCore/QuartzCore.h>
 #import <math.h>
 
@@ -81,6 +87,7 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
     float value = [self.unit isEqualToString:@"pt"] ? roundf(slider.value) : roundf(slider.value * 100) / 100;
     if ([self.preferenceKey isEqualToString:@"liveLike.interval"]) value = DY778LiveLikeInterval(slider.value);
     if ([self.preferenceKey isEqualToString:@"liveLike.pause"]) value = DY778LiveLikePause(slider.value);
+    if ([self.preferenceKey isEqual:@"liveInfo.refresh"]) value = roundf(slider.value);
     slider.value = value; [self updateValue]; DY778Set(self.preferenceKey, @(value));
 }
 @end
@@ -124,6 +131,7 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(environmentChanged:) name:UIContentSizeCategoryDidChangeNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(archiveChanged:) name:DY778RecallChangedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(cacheStatisticsChanged:) name:DY778CacheStatisticsChangedNotification object:nil];
+    if ([self.page isEqualToString:@"home"]) [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(environmentChanged:) name:DY778RadarStoreChanged object:nil];
     if ([self.page isEqualToString:@"cache"]) {
         self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:self action:@selector(refreshCacheUsage)];
         self.navigationItem.rightBarButtonItem.accessibilityLabel = @"重新统计缓存";
@@ -165,7 +173,8 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
         [key isEqualToString:@"time.color"] || [key isEqualToString:@"recall.bubbleColor"] || [key isEqualToString:@"edit.bubbleColor"]) {
         [UIView performWithoutAnimation:^{ [self updatePreview]; }]; return;
     }
-    if ([key isEqualToString:@"lucky.delay"] || [key isEqualToString:@"liveLike.interval"] || [key isEqualToString:@"liveLike.pause"]) return;
+    if ([key isEqualToString:@"lucky.delay"] || [key isEqualToString:@"liveLike.interval"] || [key isEqualToString:@"liveLike.pause"] ||
+        [@[@"liveInfo.refresh", @"liveInfo.fontSize", @"liveInfo.opacity"] containsObject:key]) return;
     [self refresh];
     if (preview && !theme) [UIView performWithoutAnimation:^{ [self updatePreview]; }];
 }
@@ -190,18 +199,53 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
             DY778Section(@"消息", @"", @[
                 DY778Row(@"消息留存", @"防撤回、会话记录与作品预览", @"nav", @"recall", @"tray.full.fill"),
                 DY778Row(@"编辑历史", @"查看对方消息的原文、编辑版本和时间", @"nav", @"edit", @"pencil.circle"),
+                DY778Row(@"特别关注", @"联系人、可见数据变化与动态档案", @"nav", @"radar", @"person.crop.circle.badge.checkmark"),
+                DY778Row(@"聊天火花", @"按聊天自定义状态与天数，仅本机显示", @"nav", @"spark", @"flame"),
                 DY778Row(@"时间标签", @"格式、位置与颜色", @"nav", @"time", @"clock.fill")]),
             DY778Section(@"直播与播放", @"", @[
                 DY778Row(@"福袋助手", @"参与条件、开奖提醒与参与记录", @"nav", @"lucky", @"gift.fill"),
                 DY778Row(@"直播自动点赞", @"双击开始、目标次数与点赞进度", @"nav", @"liveLike", @"hand.thumbsup.fill"),
+                DY778Row(@"直播信息", @"推荐页在线人数、开播时长与浮层样式", @"nav", @"liveInfo", @"person.2.wave.2"),
                 DY778Row(@"视频播放", @"默认倍速、播完暂停与长按倍速", @"nav", @"playback", @"play.rectangle.fill")]),
+            DY778Section(@"互动与查询", @"星牌查询开启后，用户主页会显示查询按钮；只展示当前可查询且归属匹配的资料。", @[
+                DY778Row(@"操作确认", @"点赞、收藏、关注与评论赞踩防误触", @"nav", @"confirm", @"hand.tap"),
+                DY778Row(@"星牌查询", @"在用户主页查询消费等级与粉丝灯牌", @"switch", @"fans.enabled", @"star.circle")]),
+            DY778Section(@"显示与整理", @"数字自定义仅影响本机显示；列表清理会实际取消所选互动，执行前需要确认。", @[
+                DY778Row(@"主页与作品数字", @"自定义本人主页及作品的显示数字", @"nav", @"displayStats", @"number.circle"),
+                DY778Row(@"列表清理", @"长按本人主页标签，确认后清空对应列表", @"nav", @"listClear", @"rectangle.stack.badge.minus")]),
             DY778Section(@"测试功能", @"仅处理推荐页的视频和图文。综合原生广告标记、软广信息、交易信息与促销文案判断，不因品牌名直接跳过。保护已关注、点赞或收藏的作品；下滑可回看，近期已跳过的作品不会再次跳过。", @[
                 DY778Row(@"跳过疑似广告", @"谨慎识别 · 不确定时保留", @"switch", @"experimental.skipAds", @"line.3.horizontal.decrease.circle")]),
-            DY778Section(@"设置", @"DY778 1.0-2 · 设置即时生效", @[
+            DY778Section(@"设置", @"DY778 1.0-3 · 设置即时生效", @[
                 DY778Row(@"缓存管理", @"查看占用、手动清理与自动整理", @"nav", @"cache", @"internaldrive.fill"),
                 DY778Row(@"外观", @"主题与点缀色", @"nav", @"appearance", @"paintpalette.fill"),
                 DY778Row(@"关于 DY778", @"版本信息、开源项目与频道", @"nav", @"about", @"info.circle")])
         ];
+    } else if ([self.page isEqualToString:@"liveInfo"]) {
+        self.title = @"直播信息";
+        self.sections = @[
+            DY778Section(@"推荐页直播卡片", @"卡片停稳、位置和数据有效后再展示。人数与时长使用独立胶囊；同时开启时上下排列，间隔少许距离。离开推荐页或进入后台暂停刷新。", @[
+                DY778Row(@"显示在线人数", @"无需进入直播间，查看当前可读取的人数", @"switch", @"liveInfo.viewers", @"person.2.fill"),
+                DY778Options(@"人数格式", @"liveInfo.countFormat", @[@"简洁 · 1.2万", @"完整 · 12345"], @[@"compact", @"exact"]),
+                DY778Range(@"人数刷新间隔", @"liveInfo.refresh", 2, 10, @"秒"),
+                DY778Row(@"显示开播时长", @"独立于在线人数开关", @"switch", @"liveInfo.cardDuration", @"clock")]),
+            DY778Section(@"直播间浮层", @"默认在画面上方居中显示，可拖动避开直播内容。横屏、竖屏分别记忆位置；返回直播间继续使用对应位置。未取得有效开播时间时暂不显示。", @[
+                DY778Row(@"显示开播时长", @"在当前直播间显示可拖动的时间胶囊", @"switch", @"liveInfo.duration", @"clock.fill"),
+                DY778Range(@"文字大小", @"liveInfo.fontSize", 11, 19, @"pt"),
+                DY778Row(@"文字颜色", @"同时应用于直播间胶囊图标", @"color", @"liveInfo.textColor", @"textformat"),
+                DY778Row(@"背景颜色", @"仅调整直播间浮层", @"color", @"liveInfo.backgroundColor", @"paintpalette"),
+                DY778Range(@"背景不透明度", @"liveInfo.opacity", .15, 1, @"%"),
+                DY778Row(@"恢复默认位置", @"同时重置横屏和竖屏位置", @"action", @"resetLiveClockPosition", @"arrow.uturn.backward")]),
+            DY778Section(@"显示说明", @"在线人数以本次可读取的数据为准，可能随直播间刷新节奏变化；开播时长依据房间返回的开播时间计算。卡片胶囊使用统一样式，不跟随直播间浮层的自定义配色。", @[])];
+    } else if ([self.page isEqualToString:@"confirm"]) {
+        self.title = @"操作确认";
+        self.sections = @[
+            DY778Section(@"作品互动", @"执行或取消对应操作前显示紧凑确认弹窗。选择暂不操作不会改变状态；等待确认期间若内容已切换，本次操作会取消。", @[
+                DY778Row(@"点赞确认", @"作品点赞与取消点赞", @"switch", @"confirm.like", @"heart"),
+                DY778Row(@"收藏确认", @"收藏与取消收藏", @"switch", @"confirm.favorite", @"bookmark"),
+                DY778Row(@"关注确认", @"关注与取消关注", @"switch", @"confirm.follow", @"person.badge.plus")]),
+            DY778Section(@"评论互动", @"适用于评论和回复，分别确认点赞、点踩及其取消操作。", @[
+                DY778Row(@"评论点赞确认", @"点赞前确认，已点赞时确认取消", @"switch", @"confirm.commentLike", @"hand.thumbsup"),
+                DY778Row(@"评论点踩确认", @"点踩前确认，已点踩时确认取消", @"switch", @"confirm.commentDislike", @"hand.thumbsdown")])];
     } else if ([self.page isEqualToString:@"edit"]) {
         self.title = @"编辑历史";
         self.sections = @[
@@ -271,7 +315,7 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
     } else if ([self.page isEqualToString:@"lucky"]) {
         self.title = @"福袋助手";
         self.sections = @[
-            DY778Section(@"进入直播后开始", @"仅处理普通免费福袋。确认模式先展示本场信息；自动模式静默发送所需评论并报名。成功后简短提示，灯牌条件不符时提示跳过。", @[
+            DY778Section(@"进入直播后开始", @"仅支持普通免费福袋，暂不支持超级福袋。确认模式先展示本场信息；自动模式静默发送所需评论并报名。成功后简短提示，灯牌条件不符时提示跳过。", @[
                 DY778Row(@"启用福袋助手", @"只处理你当前正在观看的直播间", @"switch", @"lucky.enabled", @"gift"),
                 DY778Options(@"参与方式", @"lucky.mode", @[@"确认后参与", @"自动参与"], @[@"confirm", @"auto"]),
                 DY778Row(@"发现福袋时弹窗", @"确认后参与模式下显示；自动模式不弹窗", @"switch", @"lucky.prompt", @"rectangle.on.rectangle"),
@@ -300,11 +344,11 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
         self.sections = @[
             DY778Section(@"播放结束", @"暂停后可手动重播或切换下一条。", @[
                 DY778Row(@"看完视频作品自动暂停", @"视频播放结束时暂停", @"switch", @"playback.stopAtEnd", @"pause.circle")]),
-            DY778Section(@"默认播放速度", @"仅对视频作品生效，直播和图文不调整。长按加速优先，松手后恢复正常播放速度。", @[
+            DY778Section(@"默认播放速度", @"仅对视频作品生效，直播和图文不调整。长按加速期间优先使用长按速度。", @[
                 DY778Row(@"视频作品默认倍速", @"首次关闭，开启后使用所选倍速", @"switch", @"playback.defaultEnabled", @"play.circle"),
                 DY778Options(@"默认倍速", @"playback.defaultRate", @[@"1.25×", @"2×", @"2.5×", @"3×"], @[@1.25, @2, @2.5, @3]),
                 DY778Row(@"自定义默认倍速", @"支持 1×–3×，最多两位小数", @"action", @"customDefaultPlaybackRate", @"speedometer")]),
-            DY778Section(@"长按倍速", @"只在长按加速期间使用所选速度，松手或取消手势后恢复。", @[
+            DY778Section(@"长按倍速", @"使用抖音原有的长按加速手势，可按习惯设置播放速度。", @[
                 DY778Row(@"自定义长按倍速", @"使用抖音原有的长按加速手势", @"switch", @"playback.longPressEnabled", @"hand.point.up.left"),
                 DY778Options(@"长按速度", @"playback.longPressRate", @[@"1×", @"1.25×", @"1.5×", @"2×", @"2.5×", @"3×"], @[@1, @1.25, @1.5, @2, @2.5, @3]),
                 DY778Row(@"自定义速度", @"支持 1×–3×，最多两位小数，默认 2×", @"action", @"customPlaybackRate", @"speedometer")])
@@ -407,6 +451,18 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section { return [self.sections[section][@"rows"] count]; }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section { return self.sections[section][@"title"]; }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section { NSString *footer = self.sections[section][@"footer"]; return footer.length ? footer : nil; }
+- (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
+    if (![view isKindOfClass:UITableViewHeaderFooterView.class] || section < 0 || (NSUInteger)section >= self.sections.count) return;
+    UILabel *label = ((UITableViewHeaderFooterView *)view).textLabel;
+    NSString *text = self.sections[section][@"footer"];
+    NSArray *warnings = nil;
+    for (NSDictionary *row in self.sections[section][@"rows"]) {
+        if ([row[@"key"] isEqualToString:@"lucky.enabled"]) {
+            warnings = @[@"仅支持普通免费福袋", @"暂不支持超级福袋"]; break;
+        }
+    }
+    label.attributedText = DY778WarningText(text, label.font, UIColor.secondaryLabelColor, warnings);
+}
 - (NSDictionary *)rowAt:(NSIndexPath *)path { return self.sections[path.section][@"rows"][path.row]; }
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
     NSDictionary *row = [self rowAt:path]; NSString *kind = row[@"kind"], *key = row[@"key"];
@@ -422,8 +478,7 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
     cell.detailTextLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote]; cell.detailTextLabel.adjustsFontForContentSizeCategory = YES;
     cell.detailTextLabel.numberOfLines = 0; cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
     cell.detailTextLabel.text = row[@"subtitle"]; cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-    cell.imageView.image = [UIImage systemImageNamed:row[@"icon"] withConfiguration:
-        [UIImageSymbolConfiguration configurationWithPointSize:21 weight:UIImageSymbolWeightMedium]];
+    cell.imageView.image = DY778MenuIcon(row[@"icon"]);
     cell.imageView.tintColor = DY778Accent();
     cell.contentView.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(17, 20, 17, 16);
     if ([kind isEqualToString:@"switch"]) {
@@ -455,6 +510,12 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
     if ([key isEqualToString:@"archive"]) cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu 条已撤回记录 · 点击查看", (unsigned long)DY778RecallCount()];
     if ([kind isEqualToString:@"nav"] && ![key isEqualToString:@"appearance"] && ![key isEqualToString:@"about"]) {
         NSString *enabledKey = [key stringByAppendingString:@".enabled"];
+        if ([key isEqual:@"liveInfo"] || [key isEqual:@"confirm"] || [key isEqual:@"radar"]) {
+            BOOL on = [key isEqual:@"radar"] ? [DY778RadarStore.shared.options[@"enabled"] boolValue] : [key isEqual:@"liveInfo"] ?
+                (DY778Bool(@"liveInfo.viewers") || DY778Bool(@"liveInfo.cardDuration") || DY778Bool(@"liveInfo.duration")) :
+                (DY778Bool(@"confirm.like") || DY778Bool(@"confirm.favorite") || DY778Bool(@"confirm.follow") || DY778Bool(@"confirm.commentLike") || DY778Bool(@"confirm.commentDislike"));
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@",on ? @"已开启" : @"未开启",row[@"subtitle"]]; return cell;
+        }
         cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@", ([key isEqualToString:@"playback"] ? (DY778Bool(@"playback.stopAtEnd") || DY778Bool(@"playback.longPressEnabled") || DY778Bool(@"playback.defaultEnabled")) : DY778Bool(enabledKey)) ? @"已开启" : @"未开启", row[@"subtitle"]];
     }
     if ([kind isEqualToString:@"info"]) { cell.accessoryType = UITableViewCellAccessoryNone; cell.selectionStyle = UITableViewCellSelectionStyleNone; }
@@ -467,7 +528,7 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
     if (toggle.on && [key isEqualToString:@"lucky.enabled"] && !DY778Bool(@"lucky.enableNoticeShown")) {
         [toggle setOn:NO animated:YES];
         __weak typeof(self) weakSelf = self;
-        DY778ConfirmDelayed(self, @"福袋助手 · 参与范围", @"仅自动处理普通免费福袋，按本场要求发送评论并完成报名。\n\n需要新点亮粉丝灯牌、提升灯牌等级，或存在送礼、付费等额外条件时，会自动跳过。\n\n已持有本主播的有效灯牌且等级满足要求时，可以继续发送评论并报名。条件不明时不自动操作。\n\n自动模式不展示报名过程。参与成功或因灯牌资格跳过时简短提示，同场不重复提醒。", 2, ^{
+        DY778ConfirmDelayedEmphasized(self, @"福袋助手 · 参与范围", @"目前仅支持普通免费福袋，暂不支持超级福袋。直播间如展示超级福袋，请按官方页面手动参与，开启助手不会自动报名。\n\n普通福袋会按本场要求发送评论并报名。需要新点亮粉丝灯牌、提升等级、送礼、付费，或条件无法确认时，会跳过自动处理。\n\n已持有本主播的有效灯牌且等级达标时，可继续报名。自动模式不展示报名过程，参与成功或灯牌资格不符时简短提示，同场不重复提醒。", @[@"仅支持普通免费福袋", @"暂不支持超级福袋"], 2, ^{
             [DY778Preferences() setBool:YES forKey:@"lucky.enableNoticeShown"];
             DY778Set(@"lucky.enabled", @YES); [weakSelf.tableView reloadData];
         });
@@ -563,7 +624,7 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
     double rate = 0;
     BOOL valid = text.length > 0 && text.length <= 8 && [scanner scanDouble:&rate] && scanner.isAtEnd && isfinite(rate) && rate >= 1 && rate <= 3 && fabs(rate * 100 - round(rate * 100)) < .000001;
     self.rateAlert.actions.lastObject.enabled = valid;
-    self.rateAlert.message = valid ? ([self.rateKey isEqualToString:@"playback.defaultRate"] ? [NSString stringWithFormat:@"开启默认倍速后，视频作品以 %g× 播放。", rate] : [NSString stringWithFormat:@"长按时使用 %g×，松手后恢复原速度。", rate]) : @"请输入 1–3 之间的倍数，最多两位小数，例如 1.25 或 2.50。";
+    self.rateAlert.message = valid ? ([self.rateKey isEqualToString:@"playback.defaultRate"] ? [NSString stringWithFormat:@"开启默认倍速后，视频作品以 %g× 播放。", rate] : [NSString stringWithFormat:@"长按加速时使用 %g×。", rate]) : @"请输入 1–3 之间的倍数，最多两位小数，例如 1.25 或 2.50。";
 }
 - (void)configureCacheCell:(UITableViewCell *)cell key:(NSString *)key {
     NSDictionary *statistics = self.cacheStatistics;
@@ -579,7 +640,7 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
             (statistics ? (available ? @"清空缓存目录，仅保留插件配置" : @"暂无缓存") : @"统计完成后即可清理");
         cell.textLabel.textColor = enabled ? (busy ? UIColor.systemRedColor : DY778Accent()) : UIColor.tertiaryLabelColor;
         cell.imageView.tintColor = cell.textLabel.textColor;
-        cell.imageView.image = [UIImage systemImageNamed:busy && manual ? @"stop.circle" : @"sparkles"];
+        cell.imageView.image = DY778MenuIcon(busy && manual ? @"stop.circle" : @"sparkles");
         cell.accessoryType = UITableViewCellAccessoryNone;
         cell.selectionStyle = enabled ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
         cell.accessibilityTraits = enabled ? UIAccessibilityTraitButton : UIAccessibilityTraitButton | UIAccessibilityTraitNotEnabled;
@@ -662,6 +723,11 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
             if (!opened) dispatch_async(dispatch_get_main_queue(), ^{ DY778Toast(@"暂时无法打开链接，请稍后重试"); });
         }]; return;
     }
+    if ([key isEqualToString:@"radar"]) { DY778RadarOpenSettings(); return; }
+    if ([key isEqualToString:@"displayStats"]) { DY778PresentController(self, DY778DisplayStatsController()); return; }
+    if ([key isEqualToString:@"spark"]) { DY778PresentController(self, DY778SparkSettingsController()); return; }
+    if ([key isEqualToString:@"listClear"]) { DY778PresentController(self, DY778ListClearSettingsController()); return; }
+    if ([key isEqualToString:@"resetLiveClockPosition"]) { DY778ResetLiveClockPosition(); DY778Toast(@"已恢复直播时长的默认位置"); return; }
     if ([kind isEqualToString:@"nav"]) { DY778PresentController(self, [[DY778SettingsViewController alloc] initWithPage:key]); return; }
     if ([kind isEqualToString:@"number"]) { [self editNumber:row]; return; }
     if ([kind isEqualToString:@"choice"]) {
@@ -708,8 +774,8 @@ static NSDictionary *DY778Section(NSString *title, NSString *footer, NSArray *ro
     }
     if ([key isEqualToString:@"customFormat"]) { [self editFormat]; return; }
     if ([key isEqualToString:@"help"]) { DY778PresentHelp(self); return; }
-    if ([key isEqualToString:@"reset"]) DY778Confirm(self, @"恢复默认设置？", @"所有功能都会关闭，样式恢复默认。已保存的撤回记录和编辑历史继续保留。", @"恢复默认", YES, ^{
-        DY778ResetSettings(); DY778Toast(@"已恢复默认设置，所有功能均已关闭");
+    if ([key isEqualToString:@"reset"]) DY778Confirm(self, @"恢复默认设置？", @"各项增强功能将关闭，样式恢复默认。已保存的撤回记录和编辑历史继续保留。", @"恢复默认", YES, ^{
+        DY778ResetSettings(); DY778Toast(@"已恢复默认设置");
     });
 }
 - (void)colorPickerViewControllerDidSelectColor:(UIColorPickerViewController *)viewController {
@@ -787,22 +853,29 @@ static IMP DY778OriginalSections;
 static id DY778SettingsSections(id owner, SEL selector) {
     id value = ((id (*)(id, SEL))DY778OriginalSections)(owner, selector);
     if (![value isKindOfClass:NSArray.class]) return value;
-    Class settings = NSClassFromString(@"AWESettingsTableViewController");
-    id controller = DY778Read(owner, @"controllerDelegate");
-    if (!settings || ![controller isKindOfClass:settings] || [DY778Read(controller, @"onSearchStatus") boolValue]) return value;
+    BOOL hasAccountSection = NO;
     for (id section in value) {
+        if ([DY778Read(section, @"sectionHeaderTitle") isEqual:@"账号"]) hasAccountSection = YES;
         id items = DY778Read(section, @"itemArray"); if (![items isKindOfClass:NSArray.class]) continue;
         for (id item in items) if ([DY778Read(item, @"identifier") isEqual:@"DY778.Settings"]) return value;
     }
+    Class settings = NSClassFromString(@"AWESettingsTableViewController");
+    id controller = DY778Read(owner, @"controllerDelegate");
+    if (!DY778SettingsIsMainPage(hasAccountSection, settings && [controller isKindOfClass:settings],
+                                [DY778Read(controller, @"onSearchStatus") boolValue])) return value;
     Class itemClass = NSClassFromString(@"AWESettingItemModel"), sectionClass = NSClassFromString(@"AWESettingSectionModel");
     if (!itemClass || !sectionClass) return value;
-    id item = [itemClass new]; __weak UIViewController *source = controller;
+    id item = [itemClass new]; __weak id weakOwner = owner;
     BOOL valid = DY778Write(item, @"identifier", @"DY778.Settings");
-    valid &= DY778Write(item, @"title", @"DY778"); valid &= DY778Write(item, @"detail", DY778Version);
+    valid &= DY778Write(item, @"title", @"DY778");
+    DY778Write(item, @"detail", DY778Version);
     valid &= DY778Write(item, @"cellType", @26); valid &= DY778Write(item, @"isEnable", @YES);
     valid &= DY778Write(item, @"cellTappedBlock", ^{
         UIViewController *top = DY778TopController();
         if ([top isKindOfClass:DY778SettingsViewController.class]) return;
+        id delegate = DY778Read(weakOwner, @"controllerDelegate");
+        UIViewController *source = [delegate isKindOfClass:UIViewController.class] ? delegate : nil;
+        if (!source.isViewLoaded || !source.view.window) source = top;
         DY778PresentController(source, DY778SettingsController());
     });
     DY778Write(item, @"type", @0); DY778Write(item, @"colorStyle", @2);

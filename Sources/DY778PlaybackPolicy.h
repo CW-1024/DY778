@@ -27,8 +27,6 @@ static inline int DY778PressEnd(DY778PressSession *session, double *restore) {
     *restore = session->before; session->active = 0; return 1;
 }
 
-// A previous swizzle may invoke the selector again. Track the individual hook,
-// allowing a legitimate subclass -> superclass call with the same selector.
 typedef struct DY778PlaybackFrame {
     const void *object;
     const void *hook;

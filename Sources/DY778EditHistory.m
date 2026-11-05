@@ -151,8 +151,8 @@ static void DY778EditNotify(void) {
     sqlite3_finalize(statement); if (forgotten) { binding.record = nil; return; }
     BOOL newlyBound = !binding.record && [prior[@"changes"] unsignedIntegerValue] > 0;
     binding.record = prior;
-    // Without captured edit metadata this is an initial hydration, not a version
-    // event. Read body and metadata together; never pair an older body with later metadata.
+    // 没有取到编辑元数据时，这是首次填充而非一次版本
+    // 事件。正文与元数据一起读取；绝不把旧正文配上更晚的元数据。
     if (!info) {
         content = DY778EditImmutable(DY778Read(message, @"content"));
         info = DY778EditInfoSnapshot(DY778Read(message, @"editInfo"));

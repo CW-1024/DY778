@@ -10,11 +10,10 @@ static inline DY778EditDecision DY778DecideEdit(bool valid, bool previous, bool 
     if (currentTime > 0 && previousTime > currentTime) return DY778EditIgnore;
     if (currentCount > 0 && previousCount > currentCount) return DY778EditIgnore;
     bool newer = currentTime > previousTime || currentCount > previousCount;
-    // A revision identity is authoritative even when the text was edited back.
-    if (same) return DY778EditIgnore; // Metadata can arrive before the new body.
+    if (same) return DY778EditIgnore;
     if (newer) return DY778EditAppend;
     if (same || previousTime > 0 || previousCount > 0) return DY778EditIgnore;
-    return DY778EditAppend; // Explicit edit with no usable server revision; label observation time.
+    return DY778EditAppend;
 }
 static inline bool DY778EditShouldNotify(bool hadPrevious, bool hadCapturedVersion, long long previousChanges, long long currentChanges) {
     return hadPrevious && hadCapturedVersion && currentChanges > previousChanges;

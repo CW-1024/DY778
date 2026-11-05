@@ -1,3 +1,4 @@
+#import "DY778Enhancements.h"
 #import "DY778Core.h"
 #import "DY778EditHistory.h"
 #import "DY778Recall.h"
@@ -8,6 +9,10 @@
 #import "DY778CacheCleaner.h"
 #import "DY778FeedFilter.h"
 #import "DY778LiveLike.h"
+#import "DY778AppTarget.h"
+#import "DY778DisplayStats.h"
+#import "DY778Spark.h"
+#import "DY778ListClear.h"
 
 static void DY778InstallModules(void) {
     DY778InstallCoreHooks();
@@ -22,10 +27,21 @@ static void DY778InstallModules(void) {
     DY778InstallDefaultPlaybackHooks();
     DY778InstallFeedFilterHooks();
     DY778InstallCacheCleanerHooks();
+    DY778InstallLiveInfoHooks();
+    DY778InstallRadar();
+    DY778InstallFansHooks();
+    DY778InstallConfirmationHooks();
+    DY778InstallDisplayStats();
+    DY778InstallSpark();
+    DY778InstallListClear();
 }
 __attribute__((constructor)) static void DY778Start(void) {
     @autoreleasepool {
-        if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.ss.iphone.ugc.Aweme"]) return;
+        NSBundle *bundle = NSBundle.mainBundle;
+        if ([bundle.bundlePath.pathExtension isEqualToString:@"appex"] ||
+            [bundle objectForInfoDictionaryKey:@"NSExtension"]) return;
+        NSString *executable = bundle.executablePath.lastPathComponent;
+        if (!DY778AppTargetMatches(bundle.bundleIdentifier.UTF8String, executable.UTF8String)) return;
         DY778RegisterDefaults();
         dispatch_async(dispatch_get_main_queue(), ^{
             DY778InstallModules();

@@ -374,7 +374,7 @@ static BOOL DY778CanBeBubble(UIView *view, UITableViewCell *cell) {
 static UIView *DY778ActualBubbleView(UIView *view, UITableViewCell *cell) {
     if (![view isKindOfClass:UIView.class]) return nil;
     if ([NSStringFromClass(view.class) isEqualToString:@"AWEIMMessageBubbleGradientView"]) {
-        // updateContentRect: positions these inside a wider carrier view.
+        // updateContentRect: 会把它们定位在更宽的承载视图内。
         for (NSString *key in @[@"userBubbleView", @"gradientView"]) {
             UIView *inner = DY778Read(view, key);
             if (DY778CanBeBubble(inner, cell) && [inner isDescendantOfView:view]) {
@@ -420,8 +420,8 @@ static UIView *DY778ContentFromComponents(id manager, UITableViewCell *cell, NSU
         (*budget)--;
         NSString *name = NSStringFromClass([component class]);
         if (![name hasPrefix:@"AWEIM"] || ![name containsString:@"ContentComponent"]) continue;
-        // These native getters identify message content without guessing UILabels
-        // (nicknames and other plugins may use the same label class).
+        // 这些原生 getter 用来识别消息内容，而非猜测 UILabel
+        //（昵称和其他插件可能用同一个 label 类）。
         UIView *visible = DY778Read(component, @"visibleContentView");
         if (DY778CanBeBubble(visible, cell)) return visible;
         visible = DY778Read(DY778Read(component, @"presenter"), @"view");
@@ -634,8 +634,8 @@ static CGRect DY778VisibleObstacleBounds(UIView *view) {
         UILabel *label = (UILabel *)view;
         if (!label.text.length && !label.attributedText.length) return filled ? view.bounds : CGRectNull;
         if (filled) return view.bounds;
-        // textRect reflects line wrapping, alignment and native insets. A label's
-        // transparent full-width frame is not itself painted content.
+        // textRect 反映换行、对齐与原生内边距。label 的
+        // 透明全宽 frame 本身不是绘制出来的内容。
         CGRect text = [label textRectForBounds:label.bounds limitedToNumberOfLines:label.numberOfLines];
         return CGRectIsEmpty(text) ? view.bounds : CGRectIntersection(view.bounds, text);
     }
@@ -762,8 +762,8 @@ static void DY778UpdateCell(UITableViewCell *cell) {
         if (bindingChanged) {
             DY778HideCellDecorations(state); DY778ClearNativeMediaFallback(state);
             state.message = message; state.observedMessage = nil; state.appearanceGeneration = 0; state.geometryGeneration = 0; state.styleKey = nil;
-            // Resolve SDK metadata once per binding, after the native layout stack
-            // has returned. All subsequent geometry passes use these plain values.
+            // 每次绑定在原生布局栈返回后只解析一次 SDK 元数据。
+            // 之后所有几何计算都用这些普通值。
             NSDictionary *record = DY778RecallRecordForMessage(message);
             NSString *account = record[@"account"] ?: DY778CurrentAccountID();
             state.conversationID = record[@"conversation"] ?: DY778ConversationForMessage(message);

@@ -11,7 +11,7 @@ BUILD.md
 *.log
 *.deb
 *.dylib
-!packages/DY778-1.0-2-rootless.deb
+!packages/DY778-1.0-3-rootless.deb
 !packages/DY778.dylib
 __pycache__/
 *.pyc

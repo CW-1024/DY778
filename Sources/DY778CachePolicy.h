@@ -40,9 +40,7 @@ static inline int DY778CachePluginConfiguration(const char *relative, const char
     for (size_t i = 0; i <= length; i++) path[i] = (char)tolower((unsigned char)relative[i]);
     if (!strcmp(path, ".") || !strcmp(path, "..") || strstr(path, "../") || strstr(path, "/..")) return 1;
     const char *leaf = strrchr(path, '/'); leaf = leaf ? leaf + 1 : path;
-    int owned = strstr(path, "plugin") != NULL || strstr(path, "tweak") != NULL;
-    const char *known[] = {"dy778", "chengguang", "dyyy", "yuki", "dylike", "lickingdog", "douyinluckybag", "douyinhelper", "dystorage"};
-    for (size_t i = 0; !owned && i < sizeof(known)/sizeof(*known); i++) owned = strstr(path, known[i]) != NULL;
+    int owned = strstr(path, "plugin") != NULL || strstr(path, "tweak") != NULL || strstr(path, "dy778") != NULL;
     for (size_t i = 0; !owned && i < pluginCount; i++)
         if (plugins[i] && strlen(plugins[i]) >= 3) owned = strstr(path, plugins[i]) != NULL;
     if (!owned) return 0;
@@ -148,8 +146,6 @@ static inline int DY778CacheWalkStart(DY778CacheWalker *walk, int root) {
     if (!walk->frames[0].directory) { close(copy); DY778CacheWalkClose(walk); return 0; }
     walk->depth = 1; return 1;
 }
-// One readdir step per call lets callers yield without losing directory offsets.
-// 0 = finished, 1 = ordinary file, 2 = directory/filtered entry.
 static inline int DY778CacheWalkNext(DY778CacheWalker *walk, DY778CacheWalkFilter filter, void *context,
     char relative[4096], struct stat *snapshot, int *parent) {
     if (!walk->depth) return 0;

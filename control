@@ -1,11 +1,9 @@
 Package: com.dy778.douyin
 Name: DY778
-Version: 1.0-2
+Version: 1.0-3
 Architecture: iphoneos-arm64
-Description: DY778 · 消息留存、编辑历史、福袋助手、时间标签与播放增强。已在抖音 39.9.0 测试。
+Description: DY778 · 消息留存、特别关注、直播信息、星牌查询、操作确认与播放增强。适配抖音 39.9.0。
 Maintainer: DY778
 Author: DY778
 Section: Tweaks
 Depends: firmware (>= 14.0)
-Conflicts: com.chengguang.douyin
-Replaces: com.chengguang.douyin

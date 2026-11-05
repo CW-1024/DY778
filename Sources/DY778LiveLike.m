@@ -3,8 +3,8 @@
 #import "DY778LiveLikePolicy.h"
 #import <QuartzCore/QuartzCore.h>
 
-// Observe the native gesture, counting action and upload separately. Animation
-// callbacks alone are not a submission, and room totals include other viewers.
+// 观察原生手势，分别计数动作与上报。仅有动画
+// 回调不算一次提交，且直播间总数还包含其他观众。
 static NSString *const DY778LikeChannel = @"liveLike";
 static char DY778LikeReceiptKey;
 static SEL DY778LikeCountSelector(void) { return NSSelectorFromString(@"diggClicked:touchPoint:gapTime:isCountDigg:"); }
@@ -105,7 +105,7 @@ static BOOL DY778LikeVisible(UIView *view) {
 @end
 @implementation DY778LikeCapture
 @end
-// Used only on the main thread, for the synchronous native call stack.
+// 仅在主线程使用，对应同步的原生调用栈。
 static DY778LikeCapture *DY778LikeCurrentCapture;
 
 @interface DY778LikeReceipt : NSObject
@@ -287,8 +287,8 @@ DY778_LIKE_VARIANT(0)
 DY778_LIKE_VARIANT(1)
 #undef DY778_LIKE_VARIANT
 
-// HTSLiveApiRequest.callback receives (parsed model, NSError). Validate the
-// block ABI before wrapping; preserve the original callback and request data.
+// HTSLiveApiRequest.callback 收到 (解析后的模型, NSError)。包装前先校验
+// block 的 ABI；保留原始回调与请求数据。
 typedef struct { void *isa; int flags, reserved; void *invoke; void *descriptor; } DY778LikeBlockLayout;
 static BOOL DY778LikeCallbackCompatible(id callback) {
     if (!callback || ![callback isKindOfClass:NSClassFromString(@"NSBlock")]) return NO;

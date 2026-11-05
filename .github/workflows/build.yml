@@ -57,7 +57,7 @@ jobs:
           deb_files=("$build_dir"/packages/*.deb)
           test "${#deb_files[@]}" -eq 1
           version=$(awk -F': ' '$1 == "Version" { print $2; exit }' control)
-          test "$version" = "1.0-2"
+          test "$version" = "1.0-3"
           mkdir -p dist
           cp "${deb_files[0]}" "dist/DY778-${version}-rootless.deb"
           extract_dir="$RUNNER_TEMP/dy778-package"

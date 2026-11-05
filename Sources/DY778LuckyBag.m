@@ -7,7 +7,6 @@
 #import <QuartzCore/QuartzCore.h>
 #import <math.h>
 
-// Coordinator state is confined to the main queue.
 static NSNotificationName const DY778LuckyStateChanged = @"DY778LuckyStateChanged";
 static char DY778LuckyComponentAccountKey;
 static char DY778LuckyComponentMountKey;
@@ -701,7 +700,6 @@ static UIColor *DY778LuckyButtonTitleColor(void) {
     if (gesture.state == UIGestureRecognizerStateEnded) {
         frame.origin.x = CGRectGetMidX(frame) < CGRectGetMidX(available) ? CGRectGetMinX(available) : CGRectGetMaxX(available)-frame.size.width;
         [UIView animateWithDuration:0.18 animations:^{ self.frame = frame; }];
-        // Persist placement without a settings-change notification that could cancel a running task.
         [DY778Preferences() setDouble:frame.origin.x / fmax(1, parent.bounds.size.width) forKey:@"lucky.cardX"];
         [DY778Preferences() setDouble:frame.origin.y / fmax(1, parent.bounds.size.height) forKey:@"lucky.cardY"];
     }
@@ -2143,7 +2141,7 @@ static UIView *DY778LuckyInfoBlock(UILabel *label, NSString *symbol, UIColor *co
     cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@\n%@", [self dateText:record[@"updated"]], record[@"roomTitle"] ?: @"直播间", [record[@"confirmed"] boolValue] ? [@"已确认报名 · " stringByAppendingString:record[@"message"] ?: @""] : record[@"message"] ?: @"已记录"];
     cell.detailTextLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote]; cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
     cell.detailTextLabel.numberOfLines = 0; cell.detailTextLabel.adjustsFontForContentSizeCategory = YES;
-    cell.imageView.image = [UIImage systemImageNamed:[record[@"confirmed"] boolValue] ? @"checkmark.seal.fill" : @"gift.fill"];
+    cell.imageView.image = DY778MenuIcon([record[@"confirmed"] boolValue] ? @"checkmark.seal.fill" : @"gift.fill");
     cell.imageView.tintColor = [record[@"confirmed"] boolValue] ? UIColor.systemGreenColor : DY778Accent();
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator; return cell;
 }

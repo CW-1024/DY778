@@ -31,7 +31,8 @@ static BOOL DY778DefaultSignature(Class cls, SEL selector, char result, const ch
 }
 static BOOL DY778DefaultPressActive(id owner) {
     return [DY778Read(owner, @"isInLongPressSpeed") boolValue] ||
-        [DY778Read(DY778Read(owner, @"speedContainer"), @"isInLongPressFastSpeed") boolValue];
+        [DY778Read(DY778Read(owner, @"speedContainer"), @"isInLongPressFastSpeed") boolValue] ||
+        DY778PlaybackHasNativeLock(owner);
 }
 static BOOL DY778DefaultVideo(id model) {
     id images = DY778Read(model, @"images"), albums = DY778Read(model, @"albumImages");

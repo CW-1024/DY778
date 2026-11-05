@@ -27,21 +27,32 @@ FOUNDATION_EXPORT UIWindow *DY778ActiveWindow(void);
 FOUNDATION_EXPORT UIViewController *DY778TopController(void);
 FOUNDATION_EXPORT UIUserInterfaceStyle DY778InterfaceStyle(void);
 FOUNDATION_EXPORT UIColor *DY778Accent(void);
+FOUNDATION_EXPORT UIColor *DY778AccentForeground(void);
 FOUNDATION_EXPORT UIColor *DY778Background(void);
 FOUNDATION_EXPORT UIColor *DY778CardBackground(void);
+FOUNDATION_EXPORT UIImage *DY778MenuIcon(NSString *symbol);
 FOUNDATION_EXPORT UIColor *DY778ColorFromHex(NSString *hex, UIColor *fallback);
 FOUNDATION_EXPORT void DY778StyleController(UIViewController *controller);
 FOUNDATION_EXPORT void DY778PresentController(UIViewController *source, UIViewController *controller);
 FOUNDATION_EXPORT void DY778Toast(NSString *message);
 FOUNDATION_EXPORT void DY778ShowToast(NSString *channel, NSString *message, BOOL loading, BOOL success);
 FOUNDATION_EXPORT void DY778DismissToast(NSString *channel);
+FOUNDATION_EXPORT void DY778BeginProgressToast(NSString *channel, NSString *token, NSString *message, dispatch_block_t stopAction);
+FOUNDATION_EXPORT void DY778ShowProgressToast(NSString *channel, NSString *token, NSString *message, dispatch_block_t stopAction);
+FOUNDATION_EXPORT void DY778FinishProgressToast(NSString *channel, NSString *token, NSString *message, BOOL success);
+FOUNDATION_EXPORT void DY778DismissProgressToast(NSString *channel, NSString *token);
 FOUNDATION_EXPORT void DY778ShowSpeedToast(NSString *token, double rate);
 FOUNDATION_EXPORT void DY778DismissSpeedToast(NSString *token);
+FOUNDATION_EXPORT void DY778ShowSpeedResultToast(BOOL locked, double rate);
 FOUNDATION_EXPORT void DY778ShowNotice(UIViewController *source, NSString *title, NSString *message);
 FOUNDATION_EXPORT void DY778Confirm(UIViewController *source, NSString *title, NSString *message,
                                   NSString *confirmTitle, BOOL destructive, dispatch_block_t action);
 FOUNDATION_EXPORT void DY778ConfirmDelayed(UIViewController *source, NSString *title, NSString *message,
                                          NSTimeInterval delay, dispatch_block_t action);
+FOUNDATION_EXPORT void DY778ConfirmDelayedEmphasized(UIViewController *source, NSString *title, NSString *message,
+                                                   NSArray<NSString *> *warnings, NSTimeInterval delay, dispatch_block_t action);
+FOUNDATION_EXPORT NSAttributedString *DY778WarningText(NSString *text, UIFont *font, UIColor *color,
+                                                     NSArray<NSString *> *warnings);
 FOUNDATION_EXPORT void DY778InstallCoreHooks(void);
 FOUNDATION_EXPORT void DY778InstallSettingsHook(void);
 FOUNDATION_EXPORT UIViewController *DY778SettingsController(void);

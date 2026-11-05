@@ -1,3 +1,4 @@
+#import "DY778Enhancements.h"
 #import "DY778Recall.h"
 #import "DY778EditHistory.h"
 #import "DY778RecallPolicy.h"
@@ -76,7 +77,7 @@ static dispatch_queue_t DY778ObservationQueue(void) {
 static NSHashTable *DY778KnownMessageStates(void) {
     static NSHashTable *states; static dispatch_once_t once;
     dispatch_once(&once, ^{ states = [NSHashTable weakObjectsHashTable]; });
-    return states; // Accessed exclusively on DY778ObservationQueue.
+    return states; // 仅在 DY778ObservationQueue 上访问。
 }
 static DY778RecallFastState *DY778FastState(id message, BOOL create) {
     static os_unfair_lock creationLock = OS_UNFAIR_LOCK_INIT;
@@ -105,7 +106,7 @@ static void DY778InvalidateRecallSnapshots(NSSet<NSString *> *keys) {
         if (changed) DY778ScheduleRecallNotification();
     });
 }
-// Every live SDK instance of the same message must see the persisted recall edge.
+// 同一条消息的每个存活 SDK 实例都必须看到已持久化的撤回标记。
 static void DY778PublishPersistedRecall(NSDictionary *record) {
     if (![record[@"recalled"] boolValue] || [record[@"systemRecallNotice"] boolValue]) return;
     dispatch_async(DY778ObservationQueue(), ^{
@@ -214,7 +215,7 @@ static NSString *DY778MessageAccountID(id message) {
     id root = encoding && encoding[0] == '@' && [message isKindOfClass:NSClassFromString(@"TIMXOModel")] ? object_getIvar(message, rootIvar) : nil;
     NSString *account = DY778Identifier(DY778Read(DY778Read(root, @"config"), @"uid"));
     if (!account.length || [account isEqualToString:@"0"]) {
-        if (root) return nil; // An SDK instance without a UID must not inherit a different foreground account.
+        if (root) return nil; // 没有 UID 的 SDK 实例不得继承另一个前台账号。
         account = DY778CurrentAccountID();
     }
     if (!account.length || [account isEqualToString:@"0"]) return nil;
@@ -239,7 +240,7 @@ BOOL DY778RecallEnabledForConversation(NSString *conversationID) {
 BOOL DY778RecallEnabledForMessage(id message) {
     return DY778FastAllowed(DY778FastState(message, NO));
 }
-// This function is restricted to the observation queue; never call it from a SDK hook.
+// 本函数仅限观察队列调用；绝不从 SDK hook 里调用。
 static BOOL DY778EvaluateMessagePolicy(id message) {
     NSString *conversation = DY778Identifier(DY778Read(message, @"belongingConversationIdentifier"));
     if (!conversation.length) conversation = DY778Identifier(DY778Read(message, @"conversationID"));
@@ -439,7 +440,7 @@ static NSDictionary *DY778DecodeRow(sqlite3_stmt *statement) {
     sqlite3_finalize(columnQuery);
     if (![columns containsObject:@"server_id"]) sqlite3_exec(database, "ALTER TABLE messages ADD COLUMN server_id TEXT NOT NULL DEFAULT ''", NULL, NULL, NULL);
     sqlite3_exec(database, "CREATE INDEX IF NOT EXISTS message_server_id ON messages(account,conversation,server_id)", NULL, NULL, NULL);
-    BOOL deriveArchiveIndex = YES; // Reclassify legacy placeholder rows with the current content parser.
+    BOOL deriveArchiveIndex = YES; // 用当前内容解析器重新归类旧的占位行。
     if (![columns containsObject:@"hidden_notice"]) sqlite3_exec(database, "ALTER TABLE messages ADD COLUMN hidden_notice INTEGER NOT NULL DEFAULT 0", NULL, NULL, NULL);
     if (![columns containsObject:@"has_media"]) sqlite3_exec(database, "ALTER TABLE messages ADD COLUMN has_media INTEGER NOT NULL DEFAULT 0", NULL, NULL, NULL);
     if (deriveArchiveIndex) {
@@ -641,7 +642,7 @@ static NSDictionary *DY778DecodeRow(sqlite3_stmt *statement) {
             NSDictionary *persisted = saved ? [self databaseRecordForKey:key] : nil;
             if (persisted) DY778PublishPersistedRecall(persisted);
             @synchronized (self) {
-                // A completed older write must never publish over a newer pending recall.
+                // 已完成的旧写入绝不能覆盖更新的、挂起的撤回。
                 if (self.pendingRecords[key] == captured) {
                     [self.pendingRecords removeObjectForKey:key];
                     if (![self isForgotten:key]) [self.cache setObject:persisted ?: captured forKey:key];
@@ -1254,8 +1255,8 @@ static void DY778ObserveMessageNow(id message) {
         NSNumber *hydration = objc_getAssociatedObject(message, &kDY778HydrationRequested);
         if (!key.length || (hydration && !hydration.boolValue)) return;
         if (!hydration) {
-            // Wait for archive identity resolution before writing. Multiple SDK objects
-            // for a server message must not create separate archive rows on restart.
+            // 写入前先等存档身份解析完成。同一条服务端消息的多个
+            // SDK 对象在重启后不得各自创建独立的存档行。
             objc_setAssociatedObject(message, &kDY778HydrationRequested, @NO, OBJC_ASSOCIATION_RETAIN);
             NSDictionary *provisional = DY778BuildSnapshot(message, content, recalled);
             if (provisional) { DY778PublishRecallSnapshot(state, provisional); if (recalled) DY778ScheduleRecallNotification(); }
@@ -1490,7 +1491,7 @@ static UITableViewCell *DY778ArchiveCell(NSString *title, NSString *detail, NSSt
     cell.detailTextLabel.text = detail; cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
     cell.detailTextLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
     cell.detailTextLabel.numberOfLines = 3; cell.detailTextLabel.adjustsFontForContentSizeCategory = YES;
-    cell.imageView.image = symbol ? [UIImage systemImageNamed:symbol] : nil; cell.imageView.tintColor = DY778Accent();
+    cell.imageView.image = DY778MenuIcon(symbol); cell.imageView.tintColor = DY778Accent();
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
     return cell;
 }
@@ -1547,7 +1548,7 @@ static UITableViewCell *DY778ArchiveCell(NSString *title, NSString *detail, NSSt
 }
 - (void)cancel { [self.task cancel]; [self.session invalidateAndCancel]; }
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)task didWriteData:(int64_t)bytesWritten totalBytesWritten:(int64_t)totalBytesWritten totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
-    double limit = 32 * 1024 * 1024; // Bounded, temporary preview only.
+    double limit = 32 * 1024 * 1024; // 有上限的临时预览，仅此用途。
     if (limit > 0 && (totalBytesWritten > limit || totalBytesExpectedToWrite > limit)) {
         self.failure = [NSError errorWithDomain:@"DY778Media" code:2 userInfo:@{NSLocalizedDescriptionKey: @"附件超过单次预览大小限制，本次加载已停止"}];
         [task cancel];
@@ -1556,7 +1557,7 @@ static UITableViewCell *DY778ArchiveCell(NSString *title, NSString *detail, NSSt
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)task didFinishDownloadingToURL:(NSURL *)location {
     if (![task.response isKindOfClass:NSHTTPURLResponse.class]) return;
     NSDictionary *downloadAttributes = [NSFileManager.defaultManager attributesOfItemAtPath:location.path error:nil];
-    double limit = 32 * 1024 * 1024; // Bounded, temporary preview only.
+    double limit = 32 * 1024 * 1024; // 有上限的临时预览，仅此用途。
     if (limit > 0 && [downloadAttributes fileSize] > limit) {
         self.failure = [NSError errorWithDomain:@"DY778Media" code:2 userInfo:@{NSLocalizedDescriptionKey: @"附件超过单次预览大小限制，本次加载已停止"}];
         return;
@@ -1658,7 +1659,7 @@ static void DY778OpenArchivedWork(UIViewController *source, NSDictionary *record
     NSString *avatar = [record[@"senderAvatar"] length] ? record[@"senderAvatar"] : record[@"conversationAvatar"];
     NSString *identity = [NSString stringWithFormat:@"%@/%@", record[@"account"] ?: @"", record[@"sender"] ?: @""];
     DY778LoadAvatarURLs(self.portrait, [record[@"senderAvatarURLs"] count] ? record[@"senderAvatarURLs"] : @[avatar ?: @""], identity);
-    // Refresh alternate CDN addresses from the exact local sender profile.
+    // 从确切的本地发送方资料刷新备用 CDN 地址。
     __weak typeof(self) weakSelf = self;
     DY778GetLocalUserProfile(record[@"account"], record[@"sender"], ^(NSDictionary *profile) {
         typeof(self) self = weakSelf; if (!self || ![self.recordKey isEqual:record[@"key"]]) return;
@@ -2064,6 +2065,23 @@ static id DY778NewChatItem(Class itemClass, NSString *identifier) {
     if (returned[0] != '@' || argument[0] != '@') return nil;
     return [(id<DY778ChatSettingsInitializable>)[itemClass alloc] initWithIdentifier:identifier];
 }
+static id DY778ChatGroupedSection(Class sectionClass, NSArray *items, id templateSection) {
+    if (!items.count) return nil;
+    id section = [sectionClass new];
+    if (!DY778Write(section, @"itemViewModels", items)) return nil;
+    // 39.9.0 原生位置：单条=0，首条=1，中间=2，末条=3。
+    // 原生 cell 自行套用圆角遮罩、分隔线与主题。
+    for (NSUInteger index = 0; index < items.count; index++) {
+        NSInteger position = items.count == 1 ? 0 : index == 0 ? 1 : index == items.count - 1 ? 3 : 2;
+        DY778Write(items[index], @"internalPosition", @(position));
+    }
+    id inset = DY778Read(templateSection, @"sectionInset");
+    if ([inset isKindOfClass:NSValue.class]) DY778Write(section, @"sectionInset", inset);
+    NSNumber *spacing = DY778Read(templateSection, @"sectionSpace");
+    double gap = [spacing respondsToSelector:@selector(doubleValue)] ? spacing.doubleValue : 0;
+    DY778Write(section, @"sectionSpace", @(isfinite(gap) && gap >= 8 && gap <= 32 ? gap : 12));
+    return section;
+}
 static id DY778ChatSectionsHook(id provider, SEL selector) {
     id original = DY778OriginalChatSections(provider, selector); if (![original isKindOfClass:NSArray.class]) return original;
     NSString *conversation = DY778ChatConversationID(provider); if (!conversation.length) return original;
@@ -2074,7 +2092,7 @@ static id DY778ChatSectionsHook(id provider, SEL selector) {
         for (id item in items) if ([DY778Read(item, @"identifier") isEqual:@"com.dy778.recall-switch"]) return original;
     }
     Class sectionClass = NSClassFromString(@"IESIMChatSettingsSectionViewModel"); if (!sectionClass) return original;
-    id section = [sectionClass new]; NSMutableArray *items = [NSMutableArray array]; __weak id weakProvider = provider;
+    NSMutableArray *items = [NSMutableArray array]; __weak id weakProvider = provider;
     id toggle = DY778NewChatItem(NSClassFromString(@"IESIMChatSettingsItemSwitchViewModel"), @"com.dy778.recall-switch");
     if (toggle) {
         DY778Write(toggle, @"title", @"此聊天防撤回"); DY778Write(toggle, @"describe", DY778Bool(@"recall.enabled") ? @"DY778 · 单独管理此聊天" : @"先在DY778设置开启防撤回总开关"); DY778Write(toggle, @"isOn", @(DY778RecallEnabledForConversation(conversation)));
@@ -2116,8 +2134,22 @@ static id DY778ChatSectionsHook(id provider, SEL selector) {
         };
         if (item && DY778Write(item, @"title", @"查看编辑历史") && DY778Write(item, @"subtitle", @"原文、编辑版本与时间") && DY778Write(item, @"onClicked", open)) { DY778Write(item, @"disableArrow", @NO); [items addObject:item]; }
     }
-    if (!items.count || !DY778Write(section, @"itemViewModels", items)) return original;
-    NSMutableArray *sections = [original mutableCopy]; [sections insertObject:section atIndex:MIN((NSUInteger)1, sections.count)]; return sections;
+    DY778RadarAppendChatItem(provider, items);
+    DY778SparkAppendChatItem(provider, items);
+    NSMutableArray *recallItems = [NSMutableArray array], *editItems = [NSMutableArray array], *otherItems = [NSMutableArray array];
+    for (id item in items) {
+        NSString *identifier = DY778Read(item, @"identifier");
+        if ([identifier isEqual:@"com.dy778.recall-switch"] || [identifier isEqual:DY778ChatItemIdentifier]) [recallItems addObject:item];
+        else if ([identifier isEqual:@"com.dy778.edit-switch"] || [identifier isEqual:@"com.dy778.edit-history"]) [editItems addObject:item];
+        else [otherItems addObject:item];
+    }
+    id templateSection = [original count] > 1 ? original[1] : [original firstObject];
+    NSMutableArray *sections = [original mutableCopy]; NSUInteger insertion = MIN((NSUInteger)1, sections.count);
+    for (NSArray *group in @[recallItems, editItems, otherItems]) {
+        id section = DY778ChatGroupedSection(sectionClass, group, templateSection);
+        if (section) [sections insertObject:section atIndex:insertion++];
+    }
+    return sections;
 }
 static void (*DY778OriginalVMSetup)(id, SEL, id);
 static void (*DY778OriginalVMConversation)(id, SEL, id);

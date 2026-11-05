@@ -317,7 +317,7 @@ NSArray *DY778RecallPreviewCandidates(NSDictionary *record) {
     BOOL work = DY778RecallWorkIdentifier(record).length > 0 || [record[@"card"][@"kind"] isEqual:@"work"];
     for (NSDictionary *item in record[@"media"]) {
         if (![item[@"kind"] isEqual:@"image"] || DY778UnrelatedMediaPath(DY778ContentString(item[@"field"]))) continue;
-        // Legacy unclassified images must not displace a positively identified cover.
+        // 旧的未分类图片不得顶替已明确识别的封面。
         if (work && [item[@"sticker"] boolValue]) continue;
         [images addObject:item];
     }
